@@ -1,5 +1,5 @@
-🤖 mochi — Smart Desktop Cyber-Pet & Multi-Tool Terminal
-mochi adalah sebuah proyek perangkat keras berbasis open-source yang menggabungkan konsep virtual pet interaktif dengan utilitas terminal portabel. Ditenagai oleh microcontroller berperforma tinggi ESP32-C3 Super Mini, mochi menghadirkan kepribadian digital yang hidup melalui ekspresi mata animasi pada layar OLED, sekaligus berfungsi sebagai alat pemantau sistem (system monitor) dan jaringan lokal.
+🤖 mochi — Smart Desktop Cyber-Pet
+mochi adalah sebuah proyek perangkat keras berbasis open-source yang menggabungkan konsep virtual pet interaktif dengan utilitas terminal portabel. Ditenagai oleh microcontroller berperforma tinggi ESP32-C3 Super Mini, mochi menghadirkan kepribadian digital yang hidup melalui ekspresi mata animasi pada layar OLED, sekaligus berfungsi sebagai alat pemantau sistem esp32 (system monitor) dan jaringan lokal.
 
 Proyek ini dibangun menggunakan arsitektur State Machine yang efisien, memastikan transisi yang mulus antara mode ekspresi idle, game konsentrasi, pemutar musik retro, hingga pemindaian sinyal Wi-Fi secara real-time.
 
