@@ -247,6 +247,11 @@ void setup() {
     visualBarHeights[i] = 0;
   }
 
+  // --- MATIKAN BLUETOOTH UNTUK MENGHEMAT DAYA DAN MEMORI ---
+  #if defined(ESP32)
+    btStop(); 
+  #endif
+
   WiFi.persistent(false);
   WiFi.disconnect(true);
   delay(200);
@@ -255,7 +260,7 @@ void setup() {
   delay(100);
 
   WiFi.setSleep(WIFI_PS_NONE);
-  WiFi.setTxPower(WIFI_POWER_8_5dBm);
+  WiFi.setTxPower(WIFI_POWER_8_5dBm); // TX Power dikunci di 8.5 dBm
   delay(100);
 
   bool connected = false;
