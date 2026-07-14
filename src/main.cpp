@@ -255,7 +255,7 @@ void setup() {
   delay(100);
 
   WiFi.setSleep(WIFI_PS_NONE);
-  // Kode pembatasan daya pancar TX Power sudah dihapus dari baris ini agar sinyal Wi-Fi bekerja maksimal (Full Power)
+  WiFi.setTxPower(WIFI_POWER_8_5dBm);
   delay(100);
 
   bool connected = false;
