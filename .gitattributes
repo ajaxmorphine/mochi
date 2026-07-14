@@ -1,0 +1,3 @@
+# Paksa GitHub Linguist untuk mendeteksi semua file sumber sebagai C++
+*.c linguist-language=C++
+*.h linguist-language=C++
