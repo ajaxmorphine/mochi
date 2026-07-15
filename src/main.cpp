@@ -1,4 +1,5 @@
 // Mochi made by: @ajaxmorphine
+// Updated with Custom Menu Graphics Asset Icons & Butter Slide Game
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -13,7 +14,6 @@
 #define BUZZER_PIN     7    
 #define I2C_SDA        8    
 #define I2C_SCL        9   
-#define BLUE_LED_PIN  20    
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -84,18 +84,12 @@ const unsigned long MULTI_TAP_WINDOW = 350;
 // ---------------- Menu System Flags ----------------
 int currentSelectedMenu = 0;
 bool isInMenuSelection = false;
-const int TOTAL_MENU = 5;  
-// 0: Game, 1: Jukebox, 2: Wi-Fi Graph, 3: Sys Monitor, 4: Stealth Light
+const int TOTAL_MENU = 4;  
+// 0: Game (Butter Slide), 1: Jukebox, 2: Wi-Fi Graph, 3: Sys Monitor
 
 // ---------------- Idle Display Variant ----------------
 int idleDisplayMode = 0;  // 0: mata normal, 1: matrix, 2: audio visualizer, 3: jam
 const int TOTAL_IDLE_DISPLAY_MODES = 4; 
-
-// ---------------- Stealth Light Flag ----------------
-bool blueLedState = false;   
-bool ledStrobeMode = false;  
-unsigned long lastStrobeTime = 0;
-const unsigned long STROBE_INTERVAL = 100;  
 
 // ---------------- Lock System Flag ----------------
 bool isSystemLocked = false; 
@@ -117,67 +111,70 @@ unsigned long lastGraphUpdateTime = 0;
 #define VISUAL_BAR_COUNT 16 
 int visualBarHeights[VISUAL_BAR_COUNT];
 
+// ---------------- Butter Slide Game Variables ----------------
+const int BUTTER_GROUND_Y = 54;
+float butterY = 44.0;
+float butterVelocity = 0.0;
+const float BUTTER_GRAVITY = 0.6;
+const float BUTTER_JUMP = -7.5;
+const int BUTTER_SIZE = 10;
+
+// Logika terbalik-balik (Rotasi Visual Animasi)
+float butterAngle = 0.0; 
+bool isButterJumping = false;
+
+int obstacleX = 128;
+int obstacleWidth = 6;
+int obstacleHeight = 10;
+int gameSpeed = 4;
+int score = 0;
+unsigned long lastGameUpdate = 0;
+
 // ---------------- Game state machine ----------------
 enum GameMode { MODE_IDLE,
-                MODE_ARMED,
-                MODE_ALERT,
-                MODE_HIT,
-                MODE_MISS,
+                MODE_BUTTER_PLAY,
                 MODE_GAMEOVER,
                 MODE_CLOCK,
                 MODE_JUKEBOX,
                 MODE_MATRIX,
                 MODE_WIFIGRAPH,
-                MODE_SYSMON,
-                MODE_STEALTH_LIGHT };
+                MODE_SYSMON };
 GameMode gameMode = MODE_IDLE;
 
-int score = 0;
-int lives = 3;
-unsigned long currentWaitTime = 2000;
-const unsigned long MIN_WAIT_TIME = 700;
-const unsigned long REACTION_WINDOW = 650;
-
-unsigned long armedStartTime = 0;
-unsigned long armedTargetWait = 0;
-unsigned long alertStartTime = 0;
-unsigned long feedbackShownAt = 0;
-const unsigned long FEEDBACK_DURATION = 350;
-
 // ---------------- Jukebox Custom Song Arrays ----------------
-const int SONG_LENGTH = 102;
+const int SONG_LENGTH = 111;
 const int melody[] PROGMEM = {
-  NOTE_C5, NOTE_G4, NOTE_C5, NOTE_G4, NOTE_A4, NOTE_B4, NOTE_E4, NOTE_E4,
-  NOTE_A4, NOTE_G4, NOTE_F4, NOTE_G4, NOTE_C4, NOTE_C4, NOTE_D4, NOTE_D4,
-  NOTE_E4, NOTE_F4, NOTE_F4, NOTE_G4, NOTE_A4, NOTE_B4, NOTE_C5, NOTE_D5,
-  NOTE_G4, NOTE_E5, NOTE_D5, NOTE_C5, NOTE_D5, NOTE_B4, NOTE_G4, NOTE_C5,
-  NOTE_B4, NOTE_A4, NOTE_B4, NOTE_E4, NOTE_E4, NOTE_A4, NOTE_G4, NOTE_F4,
-  NOTE_G4, NOTE_C4, NOTE_C4, NOTE_C5, NOTE_B4, NOTE_A4, NOTE_G4, NOTE_E5,
-  NOTE_D5, NOTE_C5, NOTE_B4, NOTE_C5, NOTE_D5, NOTE_G4, NOTE_G4, NOTE_C5,
-  NOTE_B4, NOTE_A4, NOTE_G4, NOTE_A4, NOTE_B4, NOTE_E4, NOTE_E4, NOTE_C5,
-  NOTE_A4, NOTE_B4, NOTE_C5, NOTE_A4, NOTE_B4, NOTE_C5, NOTE_A4, NOTE_C5,
-  NOTE_F5, NOTE_F5, NOTE_E5, NOTE_D5, NOTE_C5, NOTE_D5, NOTE_E5, NOTE_C5,
-  NOTE_C5, NOTE_D5, NOTE_C5, NOTE_B4, NOTE_A4, NOTE_B4, NOTE_C5, NOTE_A4,
-  NOTE_A4, NOTE_C5, NOTE_B4, NOTE_A4, NOTE_G4, NOTE_C4, NOTE_C4, NOTE_G4,
-  NOTE_A4, NOTE_B4, NOTE_C5,
-  NOTE_C5, NOTE_C5, NOTE_C5
+  NOTE_F4, NOTE_F4, NOTE_D4, NOTE_AS3, NOTE_D4, NOTE_F4, NOTE_AS4, NOTE_D5,
+  NOTE_D5, NOTE_C5, NOTE_AS4, NOTE_D4, NOTE_E4, NOTE_F4, NOTE_F4, NOTE_F4,
+  NOTE_D5, NOTE_D5, NOTE_C5, NOTE_AS4, NOTE_A4, NOTE_G4, NOTE_A4, NOTE_AS4,
+  NOTE_AS4, NOTE_F4, NOTE_D4, NOTE_AS3, NOTE_F4, NOTE_F4, NOTE_D4, NOTE_AS3,
+  NOTE_D4, NOTE_F4, NOTE_AS4, NOTE_D5, NOTE_D5, NOTE_C5, NOTE_AS4, NOTE_D4,
+  NOTE_E4, NOTE_F4, NOTE_F4, NOTE_F4, NOTE_D5, NOTE_D5, NOTE_C5, NOTE_AS4,
+  NOTE_A4, NOTE_G4, NOTE_A4, NOTE_AS4, NOTE_AS4, NOTE_F4, NOTE_D4, NOTE_AS3,
+  NOTE_D5, NOTE_D5, NOTE_D5, NOTE_DS5, NOTE_F5, NOTE_F5, NOTE_DS5, NOTE_D5,
+  NOTE_C5, NOTE_D5, NOTE_DS5, NOTE_DS5, NOTE_DS5, NOTE_D5, NOTE_D5, NOTE_C5,
+  NOTE_AS4, NOTE_A4, NOTE_G4, NOTE_A4, NOTE_AS4, NOTE_D4, NOTE_E4, NOTE_F4,
+  NOTE_F4, NOTE_AS4, NOTE_AS4, NOTE_AS4, NOTE_A4, NOTE_G4, NOTE_G4, NOTE_G4,
+  NOTE_C5, NOTE_DS5, NOTE_D5, NOTE_C5, NOTE_AS4, NOTE_AS4, NOTE_A4, NOTE_F4,
+  NOTE_F4, NOTE_AS4, NOTE_AS4, NOTE_C5, NOTE_D5, NOTE_DS5, NOTE_F5, NOTE_AS4,
+  NOTE_C5, NOTE_D5, NOTE_D5, NOTE_DS5, NOTE_C5, NOTE_AS4, NOTE_AS4
 };
 
 const int noteDurations[] PROGMEM = {
-  1, 8, 4, 6, 16, 4, 8, 8,
-  4, 6, 16, 4, 8, 8, 4, 8,
-  8, 4, 8, 8, 4, 8, 8, 2,
-  8, 4, 6, 16, 4, 8, 8, 4,
-  6, 16, 4, 8, 8, 4, 8, 8,
-  4, 8, 8, 4, 6, 16, 2, 2,
-  8, 8, 8, 8, 3, 8, 2, 2,
-  8, 8, 8, 8, 3, 8, 2, 4,
-  6, 16, 4, 6, 16, 4, 8, 8,
-  2, 2, 8, 8, 8, 8, 3, 8,
-  2, 2, 8, 8, 8, 8, 3, 8,
-  2, 4, 8, 8, 4, 6, 16, 2,
-  4, 4, 1,
-  0, 0, 0
+  8, 16, 16, 4, 4, 4, 2, 8,
+  16, 16, 4, 4, 4, 2, 8, 8,
+  4, 8, 8, 4, 2, 8, 8, 4,
+  4, 4, 4, 4, 8, 16, 16, 4,
+  4, 4, 2, 8, 16, 16, 4, 4,
+  4, 2, 8, 8, 4, 8, 8, 4,
+  2, 8, 8, 4, 4, 4, 4, 4,
+  8, 8, 4, 4, 4, 2, 8, 8,
+  4, 4, 4, 2, 4, 4, 8, 8,
+  4, 2, 8, 8, 4, 4, 4, 2,
+  4, 4, 4, 8, 8, 4, 4, 4,
+  4, 8, 8, 8, 8, 4, 2, 8,
+  8, 4, 8, 8, 8, 8, 2, 8,
+  8, 4, 8, 8, 4, 2, 4
 };
 
 int tuneIndex = -1;
@@ -194,25 +191,19 @@ void updateBuzzer();
 void startJukebox();
 void updateJukebox();
 void readTouch(unsigned long currentTime);
-void armToNextRound(unsigned long currentTime);
 void runIdle(unsigned long currentTime);
 void drawMatrixContent(unsigned long currentTime);
 void drawAudioVisualizerContent(unsigned long currentTime);
 void drawClockContent(unsigned long currentTime);
-void runStealthLightMode(unsigned long currentTime);
 void runMatrixScreensaver(unsigned long currentTime);
 void runWifiGraphMode(unsigned long currentTime);
 void runSysMonitorMode(unsigned long currentTime);
 void runClockMode(unsigned long currentTime);
 void runJukeboxMode(unsigned long currentTime);
-void runArmed(unsigned long currentTime);
-void runAlert(unsigned long currentTime);
-void triggerHit(unsigned long currentTime);
-void triggerMiss(unsigned long currentTime);
-void runFeedback(unsigned long currentTime, bool isHit);
+void startButterGame();
+void runButterGame(unsigned long currentTime);
 void startGameOver(unsigned long currentTime);
 void runGameOver(unsigned long currentTime);
-void drawHud();
 void drawHint(const char* text);
 void drawEye(int eyeX, int eyeY, int w, int h);
 void drawEyesNormal(int ox, int oy, bool blinking);
@@ -227,8 +218,6 @@ void setup() {
   pinMode(TOUCH_PIN, INPUT);
   ledcSetup(0, 2000, 8);         // Channel 0, Frekuensi 2000Hz, Resolusi 8-bit
   ledcAttachPin(BUZZER_PIN, 0);
-  pinMode(BLUE_LED_PIN, OUTPUT);
-  digitalWrite(BLUE_LED_PIN, LOW);
 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
@@ -247,7 +236,6 @@ void setup() {
     visualBarHeights[i] = 0;
   }
 
-  // --- MATIKAN BLUETOOTH UNTUK MENGHEMAT DAYA DAN MEMORI ---
   #if defined(ESP32)
     btStop(); 
   #endif
@@ -355,13 +343,6 @@ void loop() {
   readTouch(currentTime);
   updateBuzzer();
 
-  if (blueLedState && ledStrobeMode) {
-    if (currentTime - lastStrobeTime >= STROBE_INTERVAL) {
-      lastStrobeTime = currentTime;
-      digitalWrite(BLUE_LED_PIN, !digitalRead(BLUE_LED_PIN));
-    }
-  }
-
   if (gameMode == MODE_JUKEBOX) {
     updateJukebox();
   }
@@ -392,13 +373,7 @@ void loop() {
         touchConfirmEvent = false;
 
         if (currentSelectedMenu == 0) {
-          score = 0;
-          lives = 3;
-          currentWaitTime = 2000;
-          playTone(600, 80);
-          delay(40);
-          playTone(900, 100);
-          armToNextRound(currentTime);
+          startButterGame();
         } else if (currentSelectedMenu == 1) { 
           playTone(587, 60);
           delay(70);
@@ -411,12 +386,6 @@ void loop() {
         } else if (currentSelectedMenu == 3) { 
           playTone(800, 80);
           gameMode = MODE_SYSMON;
-        } else if (currentSelectedMenu == 4) { 
-          playTone(900, 80);
-          blueLedState = true;
-          ledStrobeMode = false;
-          digitalWrite(BLUE_LED_PIN, HIGH);
-          gameMode = MODE_STEALTH_LIGHT;
         }
       } else if (isInMenuSelection && touchCancelEvent) {
         touchCancelEvent = false;
@@ -431,7 +400,6 @@ void loop() {
         playTone(150, 150);
       } else if (!isInMenuSelection && touchTapEvent) {
         touchTapEvent = false;
-        // Siklus Tap Idle Berurutan: Mata -> Matrix -> Visualizer -> Jam
         idleDisplayMode = (idleDisplayMode + 1) % TOTAL_IDLE_DISPLAY_MODES;
         playTone(1000 + (idleDisplayMode * 200), 60);
       }
@@ -440,17 +408,13 @@ void loop() {
 
   switch (gameMode) {
     case MODE_IDLE: runIdle(currentTime); break;
-    case MODE_ARMED: runArmed(currentTime); break;
-    case MODE_ALERT: runAlert(currentTime); break;
-    case MODE_HIT: runFeedback(currentTime, true); break;
-    case MODE_MISS: runFeedback(currentTime, false); break;
+    case MODE_BUTTER_PLAY: runButterGame(currentTime); break;
     case MODE_GAMEOVER: runGameOver(currentTime); break;
     case MODE_CLOCK: runClockMode(currentTime); break;
     case MODE_JUKEBOX: runJukeboxMode(currentTime); break;
     case MODE_MATRIX: runMatrixScreensaver(currentTime); break;
     case MODE_WIFIGRAPH: runWifiGraphMode(currentTime); break;
     case MODE_SYSMON: runSysMonitorMode(currentTime); break;
-    case MODE_STEALTH_LIGHT: runStealthLightMode(currentTime); break;
   }
 
   delay(20);
@@ -462,10 +426,10 @@ void playTone(int freq, int durationMs, bool specialEffect) {
   applyVibrato = specialEffect;
   
   if (freq == 0) {
-    ledcWrite(0, 0); // Matikan suara di Channel 0 jika freq = 0
+    ledcWrite(0, 0); 
   } else {
     ledcWriteTone(0, freq);
-    ledcWrite(0, 80); // Volume lembut (duty cycle 80 dari 255)
+    ledcWrite(0, 80); 
   }
   
   buzzerEndTime = millis() + durationMs;
@@ -475,14 +439,14 @@ void playTone(int freq, int durationMs, bool specialEffect) {
 void updateBuzzer() {
   if (buzzerActive) {
     if (millis() >= buzzerEndTime) {
-      ledcWrite(0, 0); // Matikan suara di Channel 0
+      ledcWrite(0, 0); 
       buzzerActive = false;
     } else if (applyVibrato && currentBaseFreq > 0) {
       float angle = (millis() % 150) * (2.0 * 3.14159 / 150.0);
       int smoothPitchShift = sin(angle) * 3; 
       
       ledcWriteTone(0, currentBaseFreq + smoothPitchShift);
-      ledcWrite(0, 80); // Pastikan volume tetap terjaga
+      ledcWrite(0, 80); 
     }
   }
 }
@@ -504,10 +468,6 @@ void updateJukebox() {
     int currentNote = pgm_read_word_near(melody + tuneIndex);
     int durationType = pgm_read_word_near(noteDurations + tuneIndex);
     int noteDuration = 2000 / durationType;
-
-    if (tuneIndex == SONG_LENGTH - 1) {
-      noteDuration *= 1;
-    }
 
     playTone(currentNote, noteDuration, true);
     tuneNextTime = millis() + (noteDuration * 1.30);
@@ -568,16 +528,6 @@ void readTouch(unsigned long currentTime) {
   }
 }
 
-void armToNextRound(unsigned long currentTime) {
-  gameMode = MODE_ARMED;
-  armedStartTime = currentTime;
-  armedTargetWait = random(currentWaitTime * 0.6, currentWaitTime + 1);
-  offsetX = 0;
-  offsetY = 0;
-  targetOffsetX = 0;
-  targetOffsetY = 0;
-}
-
 // ----------------- RUN SCENARIOS -----------------
 void runIdle(unsigned long currentTime) {
   if (currentTime - lastBlinkTime > blinkDelay && blinkState == 0) {
@@ -624,36 +574,62 @@ void runIdle(unsigned long currentTime) {
 
       drawEyesNormal(offsetX, offsetY, blinkState == 1);
       drawHint(customNameTag.c_str());
-    } else if (idleDisplayMode == 1) {
+    } else if (idleDisplayMode == 3) {
       drawMatrixContent(currentTime);
     } else if (idleDisplayMode == 2) {
       drawAudioVisualizerContent(currentTime);
-    } else if (idleDisplayMode == 3) {
+    } else if (idleDisplayMode == 1) {
       drawClockContent(currentTime);
     }
   } else {
+    // ------------------- MENU SELECTION GRAPHICS -------------------
+    int iconCenterX = 64;
+    int iconCenterY = 27;
+
     if (currentSelectedMenu == 0) {
-      drawEyesNormal(-10, 0, blinkState == 1);
-      drawHint("[ REACTION GAME ]");
+      // --- IKON BUTTER SLIDE ---
+      display.drawFastHLine(iconCenterX - 16, iconCenterY + 8, 32, WHITE); // Lantai dasar
+      display.drawRoundRect(iconCenterX - 6, iconCenterY - 4, 12, 10, 2, WHITE); // Mentega miring dikit
+      display.fillRect(iconCenterX + 8, iconCenterY + 2, 4, 6, WHITE); // Rintangan kecil
+      drawHint("[ BUTTER SLIDE ]");
+      
     } else if (currentSelectedMenu == 1) { 
-      int danceY = (millis() % 400 < 200) ? 2 : -2;
-      drawEyesHappyAnimation(danceY);
+      // --- IKON JUKEBOX MUSIC (Not Balok) ---
+      display.fillRect(iconCenterX - 6, iconCenterY - 10, 4, 16, WHITE);  // Tiang kiri
+      display.fillRect(iconCenterX + 6, iconCenterY - 10, 4, 16, WHITE);  // Tiang kanan
+      display.fillRoundRect(iconCenterX - 12, iconCenterY + 2, 8, 6, 2, WHITE); // Bulatan not kiri
+      display.fillRoundRect(iconCenterX, iconCenterY + 2, 8, 6, 2, WHITE);  // Bulatan not kanan
+      display.fillTriangle(iconCenterX - 6, iconCenterY - 10, iconCenterX + 10, iconCenterY - 14, iconCenterX + 10, iconCenterY - 10, WHITE); // Bendera penghubung atas
+      display.fillRect(iconCenterX - 6, iconCenterY - 10, 16, 4, WHITE);
       drawHint("[ JUKEBOX MUSIC ]");
+      
     } else if (currentSelectedMenu == 2) { 
-      drawEyesSurprised();
+      // --- IKON WI-FI GRAPH (Sinyal Wave Berundak) ---
+      display.fillRect(iconCenterX - 15, iconCenterY + 6, 5, 4, WHITE);   // Bar 1 (Paling rendah)
+      display.fillRect(iconCenterX - 7, iconCenterY + 2, 5, 8, WHITE);    // Bar 2
+      display.fillRect(iconCenterX + 1, iconCenterY - 3, 5, 13, WHITE);   // Bar 3
+      display.fillRect(iconCenterX + 9, iconCenterY - 9, 5, 19, WHITE);   // Bar 4 (Paling tinggi)
+      display.drawLine(iconCenterX - 13, iconCenterY + 6, iconCenterX - 5, iconCenterY + 2, WHITE);
+      display.drawLine(iconCenterX - 5, iconCenterY + 2, iconCenterX + 3, iconCenterY - 3, WHITE);
+      display.drawLine(iconCenterX + 3, iconCenterY - 3, iconCenterX + 11, iconCenterY - 9, WHITE);
       drawHint("[ WI-FI GRAPH ]");
+      
     } else if (currentSelectedMenu == 3) { 
-      display.drawRect(leftEyeX, eyeY + 5, eyeWidth, 12, WHITE);
-      display.drawRect(rightEyeX, eyeY + 5, eyeWidth, 12, WHITE);
-      display.fillRect(leftEyeX + 4, eyeY + 10, 4, 2, WHITE);
-      display.fillRect(rightEyeX + 4, eyeY + 10, 4, 2, WHITE);
+      // --- IKON SYSTEM MONITOR (Roda Gerigi / Cogwheel) ---
+      display.drawCircle(iconCenterX, iconCenterY, 9, WHITE);       // Struktur lingkaran luar
+      display.drawCircle(iconCenterX, iconCenterY, 4, WHITE);       // Lingkaran poros dalam
+      display.fillRect(iconCenterX - 2, iconCenterY - 13, 5, 4, WHITE);  // Atas
+      display.fillRect(iconCenterX - 2, iconCenterY + 10, 5, 4, WHITE);  // Bawah
+      display.fillRect(iconCenterX - 13, iconCenterY - 2, 4, 5, WHITE);  // Kiri
+      display.fillRect(iconCenterX + 10, iconCenterY - 2, 4, 5, WHITE);  // Kanan
+      display.fillRect(iconCenterX - 9, iconCenterY - 9, 3, 3, WHITE);
+      display.fillRect(iconCenterX + 7, iconCenterY + 6, 3, 3, WHITE);
+      display.fillRect(iconCenterX + 7, iconCenterY - 9, 3, 3, WHITE);
+      display.fillRect(iconCenterX - 9, iconCenterY + 6, 3, 3, WHITE);
       drawHint("[ SYS MONITOR ]");
-    } else if (currentSelectedMenu == 4) { 
-      display.fillTriangle(leftEyeX + 5, eyeY + 15, leftEyeX + 20, eyeY + 5, leftEyeX + 20, eyeY + 25, WHITE);
-      display.fillTriangle(rightEyeX + 5, eyeY + 15, rightEyeX + 20, eyeY + 5, rightEyeX + 20, eyeY + 25, WHITE);
-      drawHint("[ FLASHLIGHT ]");
     }
 
+    // Navigasi Index Menu bawah kanan
     display.setTextSize(1);
     display.setTextColor(WHITE);
     display.setCursor(110, 56);
@@ -736,45 +712,6 @@ void drawClockContent(unsigned long currentTime) {
     display.print(timeinfo.tm_sec);
   } else {
     display.print("OFFLINE");
-  }
-}
-
-void runStealthLightMode(unsigned long currentTime) {
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
-
-  display.setCursor(22, 2);
-  display.print("= FLASHLIGHT =");
-
-  display.setCursor(16, 22);
-  display.print("LED Power : ");
-  display.print(blueLedState ? "ON " : "OFF");
-
-  display.setCursor(16, 34);
-  display.print("LED Mode  : ");
-  display.print(ledStrobeMode ? "STROBE (BLINK)" : "STEADY");
-
-  display.setCursor(16, 56);
-  display.print("[tap once to exit]");
-  display.display();
-
-  if (touchTapEvent) {
-    touchTapEvent = false;
-    blueLedState = false;
-    ledStrobeMode = false;
-    digitalWrite(BLUE_LED_PIN, LOW);
-    playTone(1200, 60);
-    gameMode = MODE_IDLE;
-  }
-
-  if (touchConfirmEvent) {
-    touchConfirmEvent = false;
-    ledStrobeMode = !ledStrobeMode;
-    if (!ledStrobeMode) {
-      digitalWrite(BLUE_LED_PIN, HIGH);
-    }
-    playTone(ledStrobeMode ? 2200 : 1500, 80);
   }
 }
 
@@ -911,7 +848,7 @@ void runJukeboxMode(unsigned long currentTime) {
   display.setTextSize(1);
   display.setTextColor(WHITE);
   display.setCursor(22, 2);
-  display.print("= SOVIET ANTHEM =");
+  display.print("= USA ANTHEM =");
 
   display.setCursor(16, 48);
   bool stillPlaying = (tuneIndex >= 0) &&
@@ -938,124 +875,150 @@ void runJukeboxMode(unsigned long currentTime) {
   }
 }
 
-void runArmed(unsigned long currentTime) {
+// ----------------- BUTTER SLIDE ENGINE -----------------
+void startButterGame() {
+  score = 0;
+  butterY = BUTTER_GROUND_Y - BUTTER_SIZE;
+  butterVelocity = 0.0;
+  butterAngle = 0.0;
+  isButterJumping = false;
+  
+  obstacleX = 128;
+  obstacleHeight = random(8, 15);
+  gameSpeed = 4;
+  gameMode = MODE_BUTTER_PLAY;
+  lastGameUpdate = millis();
+  playTone(880, 100);
+}
+
+void runButterGame(unsigned long currentTime) {
   if (touchTapEvent) {
     touchTapEvent = false;
-    triggerMiss(currentTime);
-    return;
-  }
-
-  if (currentTime - armedStartTime >= armedTargetWait) {
-    gameMode = MODE_ALERT;
-    alertStartTime = currentTime;
-    playTone(950, 60);
-  }
-
-  display.clearDisplay();
-  drawEyesNormal(0, 0, false);
-  drawHud();
-  display.display();
-}
-
-void runAlert(unsigned long currentTime) {
-  if (touchTapEvent) {
-    touchTapEvent = false;
-    triggerHit(currentTime);
-    return;
-  }
-  if (currentTime - alertStartTime >= REACTION_WINDOW) {
-    triggerMiss(currentTime);
-    return;
-  }
-
-  display.clearDisplay();
-  drawEyesSurprised();
-  drawHud();
-  display.display();
-}
-
-void triggerHit(unsigned long currentTime) {
-  score++;
-  if (currentWaitTime > MIN_WAIT_TIME) {
-    currentWaitTime -= 120;
-    if (currentWaitTime < MIN_WAIT_TIME) currentWaitTime = MIN_WAIT_TIME;
-  }
-  playTone(1050, 80);
-  gameMode = MODE_HIT;
-  feedbackShownAt = currentTime;
-}
-
-void triggerMiss(unsigned long currentTime) {
-  lives--;
-  playTone(180, 200);
-  gameMode = MODE_MISS;
-  feedbackShownAt = currentTime;
-}
-
-void runFeedback(unsigned long currentTime, bool isHit) {
-  display.clearDisplay();
-  if (isHit) {
-    drawEyesHappy();
-  } else {
-    drawEyesSad();
-  }
-  drawHud();
-
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
-  display.setCursor(40, 2);
-  display.print(isHit ? "+1!" : "MISS");
-  display.display();
-
-  if (currentTime - feedbackShownAt >= FEEDBACK_DURATION) {
-    if (lives <= 0) {
-      startGameOver(currentTime);
-    } else {
-      armToNextRound(currentTime);
+    if (!isButterJumping) {
+      butterVelocity = BUTTER_JUMP;
+      isButterJumping = true;
+      playTone(600, 50);
     }
   }
+
+  if (currentTime - lastGameUpdate >= 25) { // Sedikit dipercepat respon framerate-nya
+    lastGameUpdate = currentTime;
+    
+    // Fisika Kubus Mentega
+    if (isButterJumping) {
+      butterVelocity += BUTTER_GRAVITY;
+      butterY += butterVelocity;
+      
+      // Kecepatan putaran sudut saat melompat (efek terbalik-balik)
+      butterAngle += 9.0; 
+      if (butterAngle >= 360.0) butterAngle -= 360.0;
+
+      // Cek landing
+      if (butterY >= BUTTER_GROUND_Y - BUTTER_SIZE) {
+        butterY = BUTTER_GROUND_Y - BUTTER_SIZE;
+        isButterJumping = false;
+        butterVelocity = 0.0;
+        butterAngle = 0.0; // Reset posisi tegak saat di tanah
+        playTone(400, 30); // Efek suara mendarat empuk
+      }
+    }
+
+    // Pergerakan Rintangan
+    obstacleX -= gameSpeed;
+    if (obstacleX < -obstacleWidth) {
+      obstacleX = 128;
+      obstacleHeight = random(8, 16);
+      score++;
+      if (score % 5 == 0 && gameSpeed < 8) {
+        gameSpeed++;
+      }
+    }
+
+    // Deteksi Hitbox Sederhana (AABB)
+    int butterLeft = 20;
+    int butterRight = 20 + BUTTER_SIZE;
+    int butterTop = (int)butterY;
+    int butterBottom = (int)butterY + BUTTER_SIZE;
+
+    int obsLeft = obstacleX;
+    int obsRight = obstacleX + obstacleWidth;
+    int obsTop = BUTTER_GROUND_Y - obstacleHeight;
+    int obsBottom = BUTTER_GROUND_Y;
+
+    if (butterRight >= obsLeft && butterLeft <= obsRight && butterBottom >= obsTop && butterTop <= obsBottom) {
+      startGameOver(currentTime);
+      return;
+    }
+  }
+
+  display.clearDisplay();
+  
+  // Garis Tanah
+  display.drawFastHLine(0, BUTTER_GROUND_Y, 128, WHITE);
+  
+  // Gambar Rintangan (Segitiga/Balok Tajam)
+  display.fillRect(obstacleX, BUTTER_GROUND_Y - obstacleHeight, obstacleWidth, obstacleHeight, WHITE);
+
+  // Render Visual Mentega dengan Efek Rotasi / Terbalik
+  int renderX = 20;
+  int renderY = (int)butterY;
+  
+  if (isButterJumping) {
+    // Membuat proyeksi rotasi 90-derajat palsu agar memori hemat (tanpa fungsi sin/cos berat)
+    int state = ((int)butterAngle / 45) % 4;
+    if (state == 1 || state == 3) {
+      // Bentuk berlian/ketupat saat berputar diagonal
+      display.fillTriangle(renderX + BUTTER_SIZE/2, renderY - 2, renderX - 2, renderY + BUTTER_SIZE/2, renderX + BUTTER_SIZE + 2, renderY + BUTTER_SIZE/2, WHITE);
+      display.fillTriangle(renderX - 2, renderY + BUTTER_SIZE/2, renderX + BUTTER_SIZE + 2, renderY + BUTTER_SIZE/2, renderX + BUTTER_SIZE/2, renderY + BUTTER_SIZE + 2, WHITE);
+    } else {
+      // Bentuk terbalik penuh atau menyamping
+      display.fillRect(renderX, renderY, BUTTER_SIZE, BUTTER_SIZE, WHITE);
+      display.drawRect(renderX + 2, renderY + 2, BUTTER_SIZE - 4, BUTTER_SIZE - 4, BLACK); // Garis corak dalam
+    }
+  } else {
+    // Efek Squash (Penyet mentega halus di tanah)
+    display.fillRoundRect(renderX, renderY + 1, BUTTER_SIZE, BUTTER_SIZE - 1, 2, WHITE);
+  }
+
+  // Papan Skor / XP
+  display.setTextSize(1);
+  display.setCursor(95, 2);
+  display.print("XP:"); display.print(score);
+  display.display();
 }
 
 void startGameOver(unsigned long currentTime) {
   gameMode = MODE_GAMEOVER;
   ledcWrite(0, 0);
-  playTone(440, 150);
-  delay(160);
-  playTone(290, 300);
+  playTone(300, 200);
+  delay(150);
+  playTone(150, 400);
 }
 
 void runGameOver(unsigned long currentTime) {
   display.clearDisplay();
   display.setTextSize(2);
   display.setTextColor(WHITE);
-  display.setCursor(15, 15);
+  display.setCursor(12, 12);
   display.print("GAME OVER");
+  
   display.setTextSize(1);
-  display.setCursor(30, 40);
+  display.setCursor(32, 36);
   display.print("Score: ");
   display.print(score);
-  display.setCursor(10, 54);
+  
+  display.setCursor(16, 54);
   display.print("[tap to return]");
   display.display();
 
   if (touchTapEvent) {
     touchTapEvent = false;
+    playTone(600, 80);
     gameMode = MODE_IDLE;
   }
 }
 
 // ----------------- PURE GRAPHIC RENDERERS -----------------
-void drawHud() {
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
-  display.setCursor(0, 0);
-  display.print("S:");
-  display.print(score);
-  display.setCursor(90, 0);
-  display.print("L:");
-  display.print(lives);
-}
-
 void drawHint(const char* text) {
   display.setTextSize(1);
   display.setTextColor(WHITE);
