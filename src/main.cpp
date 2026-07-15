@@ -1,5 +1,4 @@
 // Mochi made by: @ajaxmorphine
-// Updated with Custom Menu Graphics Asset Icons & Butter Slide Game
 
 #include <Arduino.h>
 #include <Wire.h>
