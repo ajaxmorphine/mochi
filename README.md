@@ -31,8 +31,6 @@ Cancel Hold (~1200ms): Keluar dari menu / mengaktifkan sistem kunci.
 
 📊 System Monitor (SysMon): Memantau metrik internal perangkat keras secara langsung, meliputi sisa memori RAM (Free Heap Memory dalam KB), durasi aktif (Uptime dalam detik), serta temperatur internal Core CPU.
 
-🔦 Stealth Light Mode: Mengubah fungsi lampu latar LED internal menjadi senter konstan (Steady) maupun penanda darurat (Strobe Mode).
-
 4. Konektivitas & Fleksibilitas Jaringan
 Online Mode: Sinkronisasi waktu secara presisi dengan server jam dunia memanfaatkan protokol NTP (Network Time Protocol) melalui Wi-Fi untuk menampilkan jam digital yang akurat saat screensaver.
 
